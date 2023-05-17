@@ -1,0 +1,16 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# cache
+__pycache__/
+
+# build
+askCO.egg-info/
+build/
+dist/
