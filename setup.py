@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
 	name="askCO",
-	version="0.0.1",
+	version="0.0.2",
 	author="Lucy Schrader",
 	author_email="lucy@schrader.nz",
 	description="Python interface for Te Papa's collections API",

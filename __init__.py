@@ -57,7 +57,7 @@ class Request():
 		if not self.endpoint:
 			self.endpoint = "object"
 		self.base_url = "https://data.tepapa.govt.nz/collection"
-		self.query_url = None
+		self.request_url = None
 		self.request_body = None
 
 		# Response element
@@ -73,9 +73,6 @@ class Request():
 		self.complete = False
 
 	def send_query(self):
-		if not self.quiet:
-			print("Requesting {}".format(self.query_url))
-
 		if not self.api_key:
 			# Raise error, stop script
 			pass
@@ -185,6 +182,9 @@ class Search(Request):
 			# CO API requires post data to be json-encoded, not form-encoded
 			self.request_body = json.dumps(self.request_body)
 
+			if not self.quiet:
+				print("Request body: {}".format(self.request_body))
+
 		else:
 			self.request_url = "{b}/{e}?q=".format(b=self.base_url, e=self.endpoint)
 			self.method = "GET"
@@ -221,7 +221,7 @@ class Search(Request):
 	def _multiValueFormatter(self, param_name, values):
 		return {param_name: ",".join(values)}
 
-class Scroll():
+class Scroll(Request):
 	# Continually call all matching records until done
 	def __init__(self, **kwargs):
 		Request.__init__(self, **kwargs)
@@ -259,10 +259,7 @@ class Scroll():
 				url_parts.append("{k}:{v}".format(k=f["field"], v=f["keyword"]))
 
 		self.method = "POST"
-		self.query_url = "{b}{q}&size={s}&duration={d}".format(b=scroll_base_url, q=" AND ".join(url_parts), s=self.size, d=self.duration)
-
-		if not self.quiet:
-			print("Scroll post url: {}".format(self.query_url))
+		self.request_url = "{b}{q}&size={s}&duration={d}".format(b=scroll_base_url, q=" AND ".join(url_parts), s=self.size, d=self.duration)
 
 	def run_scroll(self):
 		while self.status_code == 303:
@@ -273,7 +270,7 @@ class Scroll():
 					break
 
 			self.method = "GET"
-			self.query_url = "{b}{l}".format(b=self.base_url, l=self.response.headers["Location"])
+			self.request_url = "{b}{l}".format(b=self.base_url, l=self.response.headers["Location"])
 			self.send_query()
 			time.sleep(self.sleep)
 
@@ -288,7 +285,7 @@ class Resource(Request):
 		self.build_query()
 
 	def build_query(self):
-		self.query_url += "{b}/{e}/{i}".format(b=self.base_url, e=self.endpoint, i=self.irn)
+		self.request_url = "{b}/{e}/{i}".format(b=self.base_url, e=self.endpoint, i=self.irn)
 
 	def save_record(self):
 		self.response_text = json.loads(self.response.text)
