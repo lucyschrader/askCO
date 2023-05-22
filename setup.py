@@ -1,19 +1,21 @@
 from setuptools import setup, find_packages
 
 with open("README.md", "r") as fh:
-	long_description = "Python interface to search and query records for collections objects and specimens held by Museum of New Zealand Te Papa Tongarewa."
+	long_description = fh.read()
 
 setup(
 	name="askCO",
 	version="0.0.2",
 	author="Lucy Schrader",
 	author_email="lucy@schrader.nz",
+	license="MIT License",
 	description="Python interface for Te Papa's collections API",
 	long_description=long_description,
 	long_description_content_type="text/markdown",
-	packages=find_packages(),
-	install_requires=[],
-	license="MIT License",
+	url="https://github.com/lucyschrader/askCO",
+	packages=find_packages(include=["requests"]),
+	install_requires=["requests"],
+	python_requires=">=3.7",
 	keywords=["python", "museum", "api"],
 	classifiers=[
 		"Development Status :: 3 - Alpha",

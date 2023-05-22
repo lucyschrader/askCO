@@ -7,10 +7,11 @@ See the [API documentation](https://data.tepapa.govt.nz/docs/) for what's availa
 Te Papa's API requires a registration key in the headers of each request – go to https://data.tepapa.govt.nz/docs/register.html to register. I recommend adding the API key to an environment variable called 'TE-PAPA-KEY', and then calling that from your script to pass to askCO.
 
 ## Installation
-Clone this repo using `git clone`. Install the following packages:
-- Requests
+Install using pip: `pip install askCO`
 
-## Run a query
+askCO requires the `requests` module.
+
+## Run a search query
 The `tryCO.py` file lays out a prepared search for a page of `Myosotis` specimen records in the `Plants` collection. It calls the API key, sets functional and query parameters, and sets up then runs the search request.
 
 A `Search` request object uses:
@@ -29,7 +30,9 @@ The `Scroll` request object is similar, though it finds and returns all records,
 - `max_records`: How many records to retrieve, if you don't want everything.
 - `sleep`: How long to wait between requests for scroll pages. Set this to `0.1` to ensure you avoid getting rate limited.
 
-Search and scroll results are stored as a list of json objects in the `records` variable of the request object.
+Search and scroll results are stored as a list of dictionaries in the `records` attribute of the request object.
+
+HTTP status is stored as an integer in the `status_code` attribute.
 
 ## Get a record
 When requesting a single record, the `Resource` request object still uses:
@@ -41,4 +44,6 @@ When requesting a single record, the `Resource` request object still uses:
 
 It also takes an `irn` parameter, the specific number for that record within the endpoint. Make sure you've set the correct endpoint - /object/123456 isn't the same as /agent/123456.
 
-The record's data is stored as a json object in the `response_text` variable of the request object.
+The record's data is stored as a dictionary in the `response_text` attribute of the request object.
+
+HTTP status is stored as an integer in the `status_code` attribute.
