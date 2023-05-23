@@ -54,8 +54,6 @@ class Request():
 
 		# Query elements
 		self.endpoint = kwargs.get("endpoint")
-		if not self.endpoint:
-			self.endpoint = "object"
 		self.base_url = "https://data.tepapa.govt.nz/collection"
 		self.request_url = None
 		self.request_body = None
@@ -164,7 +162,7 @@ class Search(Request):
 		self.build_query()
 
 	def build_query(self):
-		if self.endpoint == "object":
+		if not self.endpoint:
 			self.request_url = "{}/search".format(self.base_url)
 			self.method = "POST"
 			self.request_body = {}
@@ -198,7 +196,7 @@ class Search(Request):
 			if self.query:
 				query_parts.append(self.query)
 			if self.filters:
-				for f in filters:
+				for f in self.filters:
 					query_parts.append("{k}:{v}".format(k=f["field"], v=f["keyword"]))
 
 			query_string = " AND ".join(query_parts)
@@ -246,7 +244,7 @@ class Scroll(Request):
 		self.build_query()
 
 	def build_query(self):
-		if self.endpoint == "object":
+		if not self.endpoint:
 			slug = "search"
 		else:
 			slug = self.endpoint
@@ -291,6 +289,8 @@ class Resource(Request):
 		self.build_query()
 
 	def build_query(self):
+		if not self.endpoint:
+			self.endpoint = "object"
 		self.request_url = "{b}/{e}/{i}".format(b=self.base_url, e=self.endpoint, i=self.irn)
 
 		# Build a search for related

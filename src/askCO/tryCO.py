@@ -13,7 +13,7 @@ attempts = 3
 
 def try_search():
 	# Set the search request parameters
-	endpoint = "object"
+	# No endpoint specified - will search all records
 	query = "Myosotis"
 	filters = [{"field": "type", "keyword": "Specimen"}, {"field": "collection", "keyword": "Plants"}]
 	fields = None
@@ -22,7 +22,6 @@ def try_search():
 
 	# Create the query object
 	request = Search(api_key=api_key,
-		endpoint=endpoint,
 		query=query,
 		filters=filters,
 		fields=fields,
@@ -44,6 +43,7 @@ def try_search():
 
 def try_scroll():
 	# Set the scroll request parameters
+	# Endpoint specified, will only search the object endpoint
 	endpoint = "object"
 	query = "wellington"
 	filters = [{"field": "type", "keyword": "Object"}, {"field": "hasRepresentation.rights.allowsDownload", "keyword": "True"}]
@@ -76,6 +76,7 @@ def try_scroll():
 		print(next(iter(request.records)))
 
 def try_resource():
+	# Endpoint required
 	endpoint = "object"
 	irn = 1390415
 
