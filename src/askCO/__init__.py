@@ -297,13 +297,13 @@ class Resource(Request):
 		if self.related == True:
 			self.request_url += "/related"
 			if self.size or self.types:
-        		self.request_url += "?"
-    		if self.size:
-		        self.request_url += "size={}".format(size)
-		    if self.size and self.types:
-		        self.request_url += "&"
-		    if self.types:
-		        self.request_url += "types={}".format(types)
+				self.request_url += "?"
+			if self.size:
+				self.request_url += "size={}".format(size)
+			if self.size and self.types:
+				self.request_url += "&"
+			if self.types:
+				self.request_url += "types={}".format(types)
 
 	def save_record(self):
 		self.response_text = json.loads(self.response.text)
