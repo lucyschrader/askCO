@@ -47,3 +47,8 @@ It also takes an `irn` parameter, the specific number for that record within the
 The record's data is stored as a dictionary in the `response_text` attribute of the request object.
 
 HTTP status is stored as an integer in the `status_code` attribute.
+
+Get related records by adding the following parameters:
+- `related` (set to True)
+- `size` (the number of related records to return)
+- `types` (a comma separated list of `type` values, eg `Object,Specimen` or `Person`)

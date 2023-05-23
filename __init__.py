@@ -105,7 +105,10 @@ class Request():
 				if self.query_type == "search":
 					self.save_records()
 				elif self.query_type == "resource":
-					self.save_record()
+					if self.related == False:
+						self.save_record()
+					elif self.related == True:
+						self.save_records()
 				self.complete = True
 			case 204:
 				# Successful completion of scroll request
@@ -281,11 +284,26 @@ class Resource(Request):
 		self.query_type = "resource"
 		self.method = "GET"
 		self.irn = kwargs.get("irn")
+		self.related = False
+		self.size = None
+		self.types = None
 
 		self.build_query()
 
 	def build_query(self):
 		self.request_url = "{b}/{e}/{i}".format(b=self.base_url, e=self.endpoint, i=self.irn)
+
+		# Build a search for related
+		if self.related == True:
+			self.request_url += "/related"
+			if self.size or self.types:
+        		self.request_url += "?"
+    		if self.size:
+		        self.request_url += "size={}".format(size)
+		    if self.size and self.types:
+		        self.request_url += "&"
+		    if self.types:
+		        self.request_url += "types={}".format(types)
 
 	def save_record(self):
 		self.response_text = json.loads(self.response.text)
