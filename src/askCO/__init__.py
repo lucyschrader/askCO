@@ -145,7 +145,8 @@ class Request():
 			if not self.quiet:
 				print("Retrieving {} records".format(self.record_count))
 
-		self.records.extend([result for result in response_text["results"]])
+		if response_text.get("results"):
+			self.records.extend([result for result in response_text["results"]])
 
 class Search(Request):
 	def __init__(self, **kwargs):
