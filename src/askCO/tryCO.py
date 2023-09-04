@@ -77,8 +77,8 @@ def try_scroll():
 
 def try_resource():
 	# Endpoint required
-	endpoint = "object"
-	irn = 1390415
+	endpoint = "agent"
+	irn = 67415
 
 	# Create the query object
 	request = Resource(api_key=api_key,
@@ -86,16 +86,18 @@ def try_resource():
 		irn=irn,
 		timeout=timeout,
 		attempts=attempts,
-		quiet=quiet)
+		quiet=quiet,
+		related=True)
 
 	# Run the query
 	request.send_query()
+	request.save_record()
 
 	# See what you got
 	print("Received record for {e}/{i}".format(e=endpoint, i=irn))
 	if request.response_text:
 		print(request.response_text)
 
-try_search()
-try_scroll()
+#try_search()
+#try_scroll()
 try_resource()

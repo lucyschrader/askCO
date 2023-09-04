@@ -283,7 +283,7 @@ class Resource(Request):
 		self.query_type = "resource"
 		self.method = "GET"
 		self.irn = kwargs.get("irn")
-		self.related = False
+		self.related = kwargs.get("related")
 		self.size = None
 		self.types = None
 
