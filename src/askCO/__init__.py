@@ -159,6 +159,7 @@ class Search(Request):
 		self.start = kwargs.get("start")
 		self.size = kwargs.get("size")
 		self.filters = kwargs.get("filters")
+		self.exists = kwargs.get("exists")
 
 		self.build_query()
 
@@ -199,6 +200,8 @@ class Search(Request):
 			if self.filters:
 				for f in self.filters:
 					query_parts.append("{k}:{v}".format(k=f["field"], v=f["keyword"]))
+			if self.exists:
+				query_parts.append("_exists_:{}".format(self.exists))
 
 			query_string = " AND ".join(query_parts)
 			url_parts.append(query_string)
@@ -236,6 +239,7 @@ class Scroll(Request):
 		self.size = kwargs.get("size")
 		self.filters = kwargs.get("filters")
 		self.duration = kwargs.get("duration")
+		self.exists = kwargs.get("exists")
 
 		self.record_limit = None
 
@@ -259,6 +263,8 @@ class Scroll(Request):
 		if self.filters:
 			for f in self.filters:
 				query_parts.append("{k}:{v}".format(k=f["field"], v=f["keyword"]))
+		if self.exists:
+			query_parts.append("_exists_:{}".format(self.exists))
 
 		url_parts = []
 		url_parts.append(" AND ".join(query_parts))

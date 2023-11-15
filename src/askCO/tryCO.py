@@ -44,10 +44,12 @@ def try_search():
 def try_scroll():
 	# Set the scroll request parameters
 	# Endpoint specified, will only search the object endpoint
+	# We'll only ask for records that have images using exists
 	endpoint = "object"
 	query = "wellington"
 	filters = [{"field": "type", "keyword": "Object"}, {"field": "hasRepresentation.rights.allowsDownload", "keyword": "True"}]
 	fields = "id,pid,hasRepresentation"
+	exists = "hasRepresentation"
 	size = 1000
 	duration = 1
 	max_records = 5000
@@ -58,6 +60,7 @@ def try_scroll():
 		query=query,
 		filters=filters,
 		fields=fields,
+		exists=exists,
 		size=size,
 		timeout=timeout,
 		attempts=attempts,
