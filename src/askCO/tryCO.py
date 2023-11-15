@@ -47,7 +47,7 @@ def try_scroll():
 	endpoint = "object"
 	query = "wellington"
 	filters = [{"field": "type", "keyword": "Object"}, {"field": "hasRepresentation.rights.allowsDownload", "keyword": "True"}]
-	fields = None,
+	fields = "id,pid,hasRepresentation"
 	size = 1000
 	duration = 1
 	max_records = 5000
@@ -99,5 +99,5 @@ def try_resource():
 		print(request.response_text)
 
 #try_search()
-#try_scroll()
-try_resource()
+try_scroll()
+#try_resource()

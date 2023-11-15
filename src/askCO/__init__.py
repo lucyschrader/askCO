@@ -252,18 +252,26 @@ class Scroll(Request):
 
 		scroll_base_url = "{b}/{s}/_scroll/?q=".format(b=self.base_url, s=slug)
 
-		url_parts = []
+		query_parts = []
 
 		if self.query:
-			url_parts.append(self.query)
+			query_parts.append(self.query)
 		if self.filters:
 			for f in self.filters:
-				url_parts.append("{k}:{v}".format(k=f["field"], v=f["keyword"]))
+				query_parts.append("{k}:{v}".format(k=f["field"], v=f["keyword"]))
+
+		url_parts = []
+		url_parts.append(" AND ".join(query_parts))
+
 		if self.fields:
 			url_parts.append("fields={}".format(self.fields))
+		if self.size:
+			url_parts.append("size={}".format(self.size))
+		if self.duration:
+			url_parts.append("duration={}".format(self.duration))
 
 		self.method = "POST"
-		self.request_url = "{b}{q}&size={s}&duration={d}".format(b=scroll_base_url, q=" AND ".join(url_parts), s=self.size, d=self.duration)
+		self.request_url = scroll_base_url + "&".join(url_parts)
 
 	def run_scroll(self):
 		while self.status_code == 303:
