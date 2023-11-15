@@ -259,6 +259,8 @@ class Scroll(Request):
 		if self.filters:
 			for f in self.filters:
 				url_parts.append("{k}:{v}".format(k=f["field"], v=f["keyword"]))
+		if self.fields:
+			url_parts.append("fields={}".format(self.fields))
 
 		self.method = "POST"
 		self.request_url = "{b}{q}&size={s}&duration={d}".format(b=scroll_base_url, q=" AND ".join(url_parts), s=self.size, d=self.duration)
