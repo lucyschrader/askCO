@@ -95,47 +95,46 @@ class Request():
 
 	def check_status(self):
 		# Check self.status_code and decide what to do
-		match self.status_code:
-			case 200:
-				# Successful completion of search or resource request
-				if not self.quiet:
-					print("Request completed successfully")
-				if self.query_type == "search":
-					self.save_records()
-				elif self.query_type == "resource":
-					if self.related == False:
-						self.save_record()
-					elif self.related == True:
-						self.save_records()
-				self.complete = True
-			case 204:
-				# Successful completion of scroll request
-				if not self.quiet:
-					print("Scroll complete: no more results")
-				self.complete = True
-			case 303:
-				# Successful completion of a scroll page
+		if self.status_code == 200:
+			# Successful completion of search or resource request
+			if not self.quiet:
+				print("Request completed successfully")
+			if self.query_type == "search":
 				self.save_records()
-				if self.query_type == "scroll":
-					if self.method == "POST":
-						if not self.quiet:
-							print("Scroll successfully started")
-						self.run_scroll()
-			case 422:
-				# Failure to complete a scroll before the duration expired
-				if not self.quiet:
-					print("Duration limit exceeded")
-				# Add function to re-run/resume
-			case 429:
-				# API rate limit reached - need to pause requests until rate limit resets
-				if not self.quiet:
-					print("API rate limit exceeded. Cool off")
-			case _:
-				if self.response:
-					response_text = json.loads(self.response.text)
-					self.error_message = self.response_text.get("userMessage")
+			elif self.query_type == "resource":
+				if self.related == False:
+					self.save_record()
+				elif self.related == True:
+					self.save_records()
+			self.complete = True
+		elif self.status_code == 204:
+			# Successful completion of scroll request
+			if not self.quiet:
+				print("Scroll complete: no more results")
+			self.complete = True
+		elif self.status_code == 303:
+			# Successful completion of a scroll page
+			self.save_records()
+			if self.query_type == "scroll":
+				if self.method == "POST":
 					if not self.quiet:
-						print("Error: {}".format(self.error_message))
+						print("Scroll successfully started")
+					self.run_scroll()
+		elif self.status_code == 422:
+			# Failure to complete a scroll before the duration expired
+			if not self.quiet:
+				print("Duration limit exceeded")
+			# Add function to re-run/resume
+		elif self.status_code == 429:
+			# API rate limit reached - need to pause requests until rate limit resets
+			if not self.quiet:
+				print("API rate limit exceeded. Cool off")
+		else:
+			if self.response:
+				response_text = json.loads(self.response.text)
+				self.error_message = self.response_text.get("userMessage")
+				if not self.quiet:
+					print("Error: {}".format(self.error_message))
 
 	def save_records(self):
 		# Save the result count for the search or scroll, save records
