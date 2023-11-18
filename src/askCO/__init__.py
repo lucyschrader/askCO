@@ -102,10 +102,10 @@ class Request():
 			if self.query_type == "search":
 				self.save_records()
 			elif self.query_type == "resource":
-				if self.related == False:
-					self.save_record()
-				elif self.related == True:
+				if self.related == True:
 					self.save_records()
+				else:
+					self.save_record()
 			self.complete = True
 		elif self.status_code == 204:
 			# Successful completion of scroll request
