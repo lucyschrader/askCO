@@ -1,7 +1,9 @@
 from requests import get, post, exceptions
 import json
 import os
+from sys import exit
 import time
+
 
 class Query():
 	# Run a single query to the API to return either a page of results or a single resource
@@ -39,6 +41,7 @@ class Query():
 		if self.response == None:
 			print("Query {m} {u} failed".format(m=method, u=url))
 
+
 class Request():
 	def __init__(self, **kwargs):
 		# Functional request settings
@@ -72,8 +75,8 @@ class Request():
 
 	def send_query(self):
 		if not self.api_key:
-			# Raise error, stop script
-			pass
+			raise ValueError("No api key found.")
+			exit("No api key found.")
 
 		self.response = Query(
 			api_key=self.api_key,
@@ -147,6 +150,7 @@ class Request():
 		if response_text.get("results"):
 			self.records.extend([result for result in response_text["results"]])
 
+
 class Search(Request):
 	def __init__(self, **kwargs):
 		Request.__init__(self, **kwargs)
@@ -157,6 +161,7 @@ class Search(Request):
 		self.sort = kwargs.get("sort")
 		self.start = kwargs.get("start")
 		self.size = kwargs.get("size")
+		# Note that filters with multiple values only work for GET queries at the moment
 		self.filters = kwargs.get("filters")
 		self.exists = kwargs.get("exists")
 
@@ -198,7 +203,11 @@ class Search(Request):
 				query_parts.append(self.query)
 			if self.filters:
 				for f in self.filters:
-					query_parts.append("{k}:{v}".format(k=f["field"], v=f["keyword"]))
+					if isinstance(f["keyword"], list):
+						filter_value = "(" + " OR ".join(f["keyword"]) + ")"
+					else:
+						filter_value = f["keyword"]
+					query_parts.append("{k}:{v}".format(k=f["field"], v=filter_value))
 			if self.exists:
 				query_parts.append("_exists_:{}".format(self.exists))
 
@@ -224,6 +233,7 @@ class Search(Request):
 
 	def _multiValueFormatter(self, param_name, values):
 		return {param_name: ",".join(values)}
+
 
 class Scroll(Request):
 	# Continually call all matching records until done
@@ -290,6 +300,7 @@ class Scroll(Request):
 			self.request_url = "{b}{l}".format(b=self.base_url, l=self.response.headers["Location"])
 			self.send_query()
 			time.sleep(self.sleep)
+
 
 class Resource(Request):
 	# Resource object to build a query and hold a returned resource

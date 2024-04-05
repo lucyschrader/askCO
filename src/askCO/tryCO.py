@@ -13,9 +13,10 @@ attempts = 3
 
 def try_search():
 	# Set the search request parameters
-	# No endpoint specified - will search all records
+	# Can only use multiple terms on a single filter for a GET query with a specified endpoint
 	query = "Myosotis"
-	filters = [{"field": "type", "keyword": "Specimen"}, {"field": "collection", "keyword": "Plants"}]
+	endpoint = "object"
+	filters = [{"field": "type", "keyword": "Specimen"}, {"field": "collection", "keyword": ["Plants", "LandMammals"]}]
 	fields = None
 	size = 100
 	start = 0
@@ -23,6 +24,7 @@ def try_search():
 	# Create the query object
 	request = Search(api_key=api_key,
 		query=query,
+		endpoint=endpoint,
 		filters=filters,
 		fields=fields,
 		size=size,
@@ -101,6 +103,6 @@ def try_resource():
 	if request.response_text:
 		print(request.response_text)
 
-#try_search()
-try_scroll()
+try_search()
+#try_scroll()
 #try_resource()
