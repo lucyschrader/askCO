@@ -1,7 +1,5 @@
 from requests import get, post, exceptions
 import json
-import os
-from sys import exit
 import time
 
 
@@ -17,7 +15,7 @@ class Query():
 
 		# TODO: Review error handling - when to keep trying, when to fall back
 		for attempt in range(attempts):
-			if self.response == None:
+			if not self.response:
 				try:
 					if not quiet:
 						print("Requesting {}".format(url))
@@ -35,10 +33,10 @@ class Query():
 					time.sleep(sleep)
 				except exceptions.HTTPError:
 					if not quiet:
-						print(response.status_code)
+						print(self.response.status_code)
 					time.sleep(sleep)
 
-		if self.response == None:
+		if not self.response:
 			print("Query {m} {u} failed".format(m=method, u=url))
 
 
@@ -56,10 +54,12 @@ class Request():
 		self.attempts = kwargs.get("attempts")
 
 		# Query elements
+		self.query_type = None
 		self.endpoint = kwargs.get("endpoint")
 		self.base_url = "https://data.tepapa.govt.nz/collection"
 		self.request_url = None
 		self.request_body = None
+		self.related = None
 
 		# Response element
 		self.status_code = None
@@ -76,7 +76,6 @@ class Request():
 	def send_query(self):
 		if not self.api_key:
 			raise ValueError("No api key found.")
-			exit("No api key found.")
 
 		self.response = Query(
 			api_key=self.api_key,
@@ -105,7 +104,7 @@ class Request():
 			if self.query_type == "search":
 				self.save_records()
 			elif self.query_type == "resource":
-				if self.related == True:
+				if self.related:
 					self.save_records()
 				else:
 					self.save_record()
@@ -321,16 +320,16 @@ class Resource(Request):
 		self.request_url = "{b}/{e}/{i}".format(b=self.base_url, e=self.endpoint, i=self.irn)
 
 		# Build a search for related
-		if self.related == True:
+		if self.related:
 			self.request_url += "/related"
 			if self.size or self.types:
 				self.request_url += "?"
 			if self.size:
-				self.request_url += "size={}".format(size)
+				self.request_url += "size={}".format(self.size)
 			if self.size and self.types:
 				self.request_url += "&"
 			if self.types:
-				self.request_url += "types={}".format(types)
+				self.request_url += "types={}".format(self.types)
 
 	def save_record(self):
 		self.response_text = json.loads(self.response.text)

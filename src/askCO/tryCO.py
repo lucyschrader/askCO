@@ -84,6 +84,8 @@ def try_resource():
 	# Endpoint required
 	endpoint = "agent"
 	irn = 67415
+	# Set related to True to search for related records
+	related = True
 
 	# Create the query object
 	request = Resource(api_key=api_key,
@@ -92,7 +94,9 @@ def try_resource():
 		timeout=timeout,
 		attempts=attempts,
 		quiet=quiet,
-		related=True)
+		related=related,
+	    size=100,
+	    types="Object")
 
 	# Run the query
 	request.send_query()
@@ -103,6 +107,6 @@ def try_resource():
 	if request.response_text:
 		print(request.response_text)
 
-try_search()
+#try_search()
 #try_scroll()
-#try_resource()
+try_resource()
