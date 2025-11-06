@@ -1,335 +1,352 @@
-from requests import get, post, exceptions
-import json
 import time
+from requests import Session, exceptions
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
-class Query():
-	# Run a single query to the API to return either a page of results or a single resource
-	# Provide the API key, a method (either GET or POST), and a complete URL and body (if POST)
-	# Redirects cannot be allowed on a scroll POST request
-	def __init__(self, api_key=None, method=None, url=None, data=None, allow_redirects=True, timeout=5, attempts=3, sleep=0.1, quiet=False):
-		auth_key = "x-api-key"
-		headers = {auth_key: api_key, "Content-Type": "application/json", "Accept": "application/json;profiles=tepapa.collections.api.v1"}
+class AskCO:
+	def __init__(self,
+	             base_url="https://data.tepapa.govt.nz/collection",
+	             api_key=None,
+	             quiet=True):
+		self.base_url = base_url.rstrip("/")
+		self.api_key = api_key
+		self.quiet = quiet
+		self.headers = self._prepare_headers()
 
-		self.response = None
+		self.valid_endpoints = ["agent",
+		                        "category",
+		                        "document",
+		                        "fieldcollection",
+		                        "group",
+		                        "media",
+		                        "object",
+		                        "place",
+		                        "scroll",
+		                        "search",
+		                        "taxon",
+		                        "topic"]
 
-		# TODO: Review error handling - when to keep trying, when to fall back
-		for attempt in range(attempts):
-			if not self.response:
-				try:
-					if not quiet:
-						print("Requesting {}".format(url))
-					if method == "GET":
-						self.response = get(url, headers=headers, timeout=timeout, allow_redirects=allow_redirects)
-					elif method == "POST":
-						self.response = post(url, data=data, headers=headers, timeout=timeout, allow_redirects=allow_redirects)
-				except exceptions.Timeout:
-					if not quiet:
-						print("{} timed out!".format(url))
-					time.sleep(sleep)
-				except exceptions.ConnectionError:
-					if not quiet:
-						print("Disconnected trying to get {}".format(url))
-					time.sleep(sleep)
-				except exceptions.HTTPError:
-					if not quiet:
-						print(self.response.status_code)
-					time.sleep(sleep)
-
-		if not self.response:
-			print("Query {m} {u} failed".format(m=method, u=url))
-
-
-class Request():
-	def __init__(self, **kwargs):
-		# Functional request settings
-		self.quiet = kwargs.get("quiet")
-		self.sleep = kwargs.get("sleep")
-
-		# Request header settings
-		self.api_key = kwargs.get("api_key")
-		self.method = None
-		self.allow_redirects = None
-		self.timeout = kwargs.get("timeout")
-		self.attempts = kwargs.get("attempts")
-
-		# Query elements
-		self.query_type = None
-		self.endpoint = kwargs.get("endpoint")
-		self.base_url = "https://data.tepapa.govt.nz/collection"
-		self.request_url = None
-		self.request_body = None
-		self.related = None
-
-		# Response element
-		self.status_code = None
-		self.response = None
-		self.response_text = None
-		self.error_message = None
-		self.record_count = 0
-		self.records = []
-
-		# Switches to True when a 200, 204, or 404 status is returned
-		# Look at self.status_code to handle retrying in other cases
-		self.complete = False
-
-	def send_query(self):
-		if not self.api_key:
-			raise ValueError("No api key found.")
-
-		self.response = Query(
-			api_key=self.api_key,
-			method=self.method,
-			url=self.request_url,
-			data=self.request_body,
-			timeout=self.timeout,
-			attempts=self.attempts,
-			allow_redirects=self.allow_redirects,
-			sleep=self.sleep,
-			quiet=self.quiet).response
-
-		self.status_code = self.response.status_code
+		self.search_defaults = {"query": "*",
+		                        "from": 0,
+		                        "size": 100}
 
 		if not self.quiet:
-			print("Request status {}".format(self.status_code))
+			print("Ready to query Te Papa's API")
 
-		self.check_status()
+	def _prepare_headers(self):
+		if not self.api_key:
+			raise ValueError("No API key provided")
+		return {"x-api-key": self.api_key, "Content-Type": "application/json",
+		        "Accept": "application/json;profiles=tepapa.collections.api.v1"}
 
-	def check_status(self):
-		# Check self.status_code and decide what to do
-		if self.status_code == 200:
-			# Successful completion of search or resource request
-			if not self.quiet:
-				print("Request completed successfully")
-			if self.query_type == "search":
-				self.save_records()
-			elif self.query_type == "resource":
-				if self.related:
-					self.save_records()
+	def _prepare_request(self, **kwargs):
+		if not self.quiet:
+			for k, v in kwargs.items():
+				print(k, v)
+
+		# Check if the provided endpoint is valid
+		endpoint = kwargs.get("endpoint")
+		if endpoint:
+			if endpoint not in self.valid_endpoints:
+				raise ValueError(f"{endpoint} endpoint not valid")
+
+		request_url = None
+		request_params = None
+		request_body = None
+		query_mode = kwargs.get("query_mode")
+
+		match query_mode:
+			case "resource":
+				if not endpoint:
+					raise ValueError("No endpoint provided")
+
+				record_id = kwargs.get("record_id")
+				if not record_id:
+					raise ValueError("No record_irn provided")
+
+				request_url = f"{self.base_url}/{endpoint}/{record_id}"
+
+			case "related":
+				if not endpoint:
+					raise ValueError("No endpoint provided")
+
+				record_id = kwargs.get("record_id")
+				if not record_id:
+					raise ValueError("No record_irn provided")
+
+				request_url = f"{self.base_url}/{endpoint}/{record_id}/related"
+				request_params = self._prepare_query_params(kwargs.get("params"))
+
+			case "scroll":
+				# Set default scroll parameters before formatting
+				if not endpoint:
+					endpoint = "search"
+				params = kwargs.get("params")
+				params["from"] = 0
+				if not params.get("duration"):
+					params["duration"] = 1
+				if not params.get("size"):
+					params["size"] = 1000
+
+				request_url = f"{self.base_url}/{endpoint}/_scroll"
+				request_params = self._prepare_query_params(params)
+
+				# Todo: Handle POST body creation
+
+			case "search":
+				# Set default search parameters before formatting
+				params = kwargs.get("params")
+				params["from"] = 0
+				if not params.get("size"):
+					params["size"] = 100
+
+				request_url = f"{self.base_url}/{endpoint}"
+				request_params = self._prepare_query_params(params)
+
+		if not self.quiet:
+			print(f"Request prepared: {request_url}")
+			if request_params:
+				print(f"Request parameters: {request_params}")
+
+		return request_url, request_params, request_body
+
+	def _prepare_query_params(self, unformatted_params):
+		# Supported parameters:
+		# q, from, size, sort, fields, duration (scroll only), types (related only)
+		params = {}
+		if unformatted_params:
+			search_string = unformatted_params.get("query")
+			if not search_string:
+				search_string = "*"
+
+			for key, value in unformatted_params.items():
+				if key == "query":
+					pass
+				elif key == "filters":
+					filter_string = self._format_query_filters(value)
+					search_string = f"{search_string} AND {filter_string}"
+				elif isinstance(value, list):
+					params[key] = ",".join(value)
 				else:
-					self.save_record()
-			self.complete = True
-		elif self.status_code == 204:
-			# Successful completion of scroll request
-			if not self.quiet:
-				print("Scroll complete: no more results")
-			self.complete = True
-		elif self.status_code == 303:
-			# Successful completion of a scroll page
-			self.save_records()
-			if self.query_type == "scroll":
-				if self.method == "POST":
-					if not self.quiet:
-						print("Scroll successfully started")
-					self.run_scroll()
-		elif self.status_code == 422:
-			# Failure to complete a scroll before the duration expired
-			if not self.quiet:
-				print("Duration limit exceeded")
-			# Add function to re-run/resume
-		elif self.status_code == 429:
-			# API rate limit reached - need to pause requests until rate limit resets
-			if not self.quiet:
-				print("API rate limit exceeded. Cool off")
-		else:
-			if self.response:
-				response_text = json.loads(self.response.text)
-				self.error_message = self.response_text.get("userMessage")
-				if not self.quiet:
-					print("Error: {}".format(self.error_message))
+					params[key] = value
 
-	def save_records(self):
-		# Save the result count for the search or scroll, save records
-		response_text = json.loads(self.response.text)
-		if not self.record_count:
-			self.record_count = response_text["_metadata"]["resultset"]["count"]
-			if not self.quiet:
-				print("Retrieving {} records".format(self.record_count))
+			params["q"] = search_string
 
-		if response_text.get("results"):
-			self.records.extend([result for result in response_text["results"]])
+		for default_key, default_value in self.search_defaults.items():
+			if default_key not in params:
+				params[default_key] = default_value
 
+		return params
 
-class Search(Request):
-	def __init__(self, **kwargs):
-		Request.__init__(self, **kwargs)
-		# Build a search for a specified page of results
-		self.query_type = "search"
-		self.query = kwargs.get("query")
-		self.fields = kwargs.get("fields")
-		self.sort = kwargs.get("sort")
-		self.start = kwargs.get("start")
-		self.size = kwargs.get("size")
+	def _format_query_filters(self, filters):
+		# Check and format search filters, validate common ones like collection
 		# Note that filters with multiple values only work for GET queries at the moment
-		self.filters = kwargs.get("filters")
-		self.exists = kwargs.get("exists")
+		# Filter terms should be lowercase and if nested, separated with "."
+		# Boolean true and false values, and values including "/", must be enclosed in double quotes
+		# To filter to records where a particular field is populated, use "_exists_"
+		query_filter_parts = []
+		if "collection" in filters:
+			filters["collection"] = self._validate_collection_filters(filters["collection"])
+		for filter_key, filter_value in filters.items():
+			if isinstance(filter_value, list):
+				# Todo: Allow use of "AND" for _exists_
+				joined_filters = " OR ".join([f"{filter_key}:{i}" for i in filter_value])
+				formatted_value = f"({joined_filters})"
+				query_filter_parts.append(formatted_value)
+			elif not filter_value:
+				# Remove filters where the value has been invalidated
+				pass
+			else:
+				query_filter_parts.append(f"{filter_key}:{filter_value}")
+		filter_string = " AND ".join(query_filter_parts)
+		return filter_string
 
-		self.build_query()
+	def _validate_collection_filters(self, query_coll):
+		# Collection filter values must be CamelCase with no spaces
+		# If collection value(s) provided are invalid, search will run without collection filter
+		collections = ["Archaeozoology", "Art", "Birds", "CollectedArchives", "Crustacea", "Fish",
+		               "FossilVertebrates", "Geology", "History", "Insects", "LandMammals",
+		               "MarineInvertebrates", "MarineMammals", "Molluscs", "MuseumArchives",
+		               "PacificCultures", "Philatelic", "Photography", "Plants", "RareBooks",
+		               "ReptilesAndAmphibians", "TaongaMāori"]
 
-	def build_query(self):
-		if not self.endpoint:
-			self.request_url = "{}/search".format(self.base_url)
-			self.method = "POST"
-			self.request_body = {}
+		if isinstance(query_coll, str):
+			if query_coll in collections:
+				return query_coll
+			else:
+				if not self.quiet:
+					print(f"Provided collection filter {query_coll} is not valid")
 
-			if self.query:
-				self.request_body.update(self._singleValueFormatter("query", self.query))
-			if self.fields:
-				self.request_body.update(self._multiValueFormatter("fields", self.fields))
-			if self.sort:
-				self.request_body.update(self._singleValueFormatter("sort", self.sort))
-			if self.start:
-				self.request_body.update(self._singleValueFormatter("from", self.start))
-			if self.size:
-				self.request_body.update(self._singleValueFormatter("size", self.size))
-			if self.filters:
-				self.request_body.update(self._singleValueFormatter("filters", self.filters))
-
-			# CO API requires post data to be json-encoded, not form-encoded
-			self.request_body = json.dumps(self.request_body)
-
-			if not self.quiet:
-				print("Request body: {}".format(self.request_body))
-
-		else:
-			self.request_url = "{b}/{e}?q=".format(b=self.base_url, e=self.endpoint)
-			self.method = "GET"
-
-			url_parts = []
-			query_parts = []
-
-			if self.query:
-				query_parts.append(self.query)
-			if self.filters:
-				for f in self.filters:
-					if isinstance(f["keyword"], list):
-						filter_value = "(" + " OR ".join(f["keyword"]) + ")"
-					else:
-						filter_value = f["keyword"]
-					query_parts.append("{k}:{v}".format(k=f["field"], v=filter_value))
-			if self.exists:
-				query_parts.append("_exists_:{}".format(self.exists))
-
-			query_string = " AND ".join(query_parts)
-			url_parts.append(query_string)
-			
-			if self.fields:
-				url_parts.append("fields={}".format(self.fields))
-			if self.start:
-				url_parts.append("from={}".format(self.start))
-			if self.size:
-				url_parts.append("size={}".format(self.size))
-			if self.sort:
-				url_parts.append("sort={}".format(self.sort))
-
-			self.request_url += "&".join(url_parts)
-
-			if not self.quiet:
-				print("Search url: {}".format(self.request_url))
-		
-	def _singleValueFormatter(self, param_name, value):
-		return {param_name: value}
-
-	def _multiValueFormatter(self, param_name, values):
-		return {param_name: ",".join(values)}
-
-
-class Scroll(Request):
-	# Continually call all matching records until done
-	def __init__(self, **kwargs):
-		Request.__init__(self, **kwargs)
-		self.query_type = "scroll"
-		self.allow_redirects = False
-
-		self.query = kwargs.get("query")
-		self.fields = kwargs.get("fields")
-		self.sort = kwargs.get("sort")
-		self.size = kwargs.get("size")
-		self.filters = kwargs.get("filters")
-		self.duration = kwargs.get("duration")
-		self.exists = kwargs.get("exists")
-
-		self.record_limit = None
-
-		if kwargs.get("max_records") != -1:
-			self.record_limit = kwargs.get("max_records")
-
-		self.build_query()
-
-	def build_query(self):
-		if not self.endpoint:
-			slug = "search"
-		else:
-			slug = self.endpoint
-
-		scroll_base_url = "{b}/{s}/_scroll/?q=".format(b=self.base_url, s=slug)
-
-		query_parts = []
-
-		if self.query:
-			query_parts.append(self.query)
-		if self.filters:
-			for f in self.filters:
-				query_parts.append("{k}:{v}".format(k=f["field"], v=f["keyword"]))
-		if self.exists:
-			query_parts.append("_exists_:{}".format(self.exists))
-
-		url_parts = []
-		url_parts.append(" AND ".join(query_parts))
-
-		if self.fields:
-			url_parts.append("fields={}".format(self.fields))
-		if self.size:
-			url_parts.append("size={}".format(self.size))
-		if self.duration:
-			url_parts.append("duration={}".format(self.duration))
-
-		self.method = "POST"
-		self.request_url = scroll_base_url + "&".join(url_parts)
-
-	def run_scroll(self):
-		while self.status_code == 303:
-			if self.record_limit:
-				if len(self.records) >= self.record_limit:
+		elif isinstance(query_coll, list):
+			valid_colls = []
+			for q_coll in query_coll:
+				if q_coll in collections:
+					valid_colls.append(q_coll)
+				else:
 					if not self.quiet:
-						print("Scroll hit record limit")
+						print(f"Provided collection filter {q_coll} is not valid")
+			if valid_colls:
+				return valid_colls
+
+		return None
+
+	def get_single_record(self, **kwargs):
+		# Request a single record. Requires a valid endpoint and a record_irn
+		endpoint = kwargs.get("endpoint")
+		if endpoint == ("search" or "scroll"):
+			raise ValueError(f"Cannot use {endpoint} endpoint for single record requests")
+
+		method = kwargs.get("method")
+		if not method:
+			method = "GET"
+
+		request_url, request_params, request_body = self._prepare_request(**kwargs)
+
+		response =  Query(url=request_url,
+		                  method=method,
+		                  headers=self.headers,
+		                  quiet=self.quiet).response
+
+		if response.ok:
+			response_json = response.json()
+			return response, response_json
+
+		return None, None
+
+	def get_search_results(self, **kwargs):
+		# If search or related, prepare the base url using endpoint or endpoint + record id
+		# If scroll, prepare the base url and POST body
+		query_mode = kwargs.get("query_mode")
+		allow_redirects = True
+		if query_mode == "scroll":
+			allow_redirects = False
+
+		# Ensure method is suitable for the query, but allow user to set "HEAD" or "OPTIONS"
+		method = kwargs.get("method")
+		if not method:
+			if query_mode == ("search" or "related"):
+				method = "GET"
+			elif query_mode == "scroll":
+				method = "POST"
+
+		request_url, request_params, request_body = self._prepare_request(**kwargs)
+		scroll_initiated = False
+
+		search_result_record_count = 0
+		retrieved_page_count = 0
+		retrieved_record_count = 0
+
+		while True:
+			page_response = Query(url=request_url,
+			                      params=request_params,
+			                      method=method,
+			                      headers=self.headers,
+			                      data=request_body,
+			                      allow_redirects=allow_redirects,
+			                      quiet=self.quiet).response
+
+			if page_response.ok:
+				page_json = page_response.json()
+				page_records = page_json.get("results")
+				page_metadata = page_json.get("_metadata")
+
+				# Count and yield the page of results
+				if page_records:
+					if not search_result_record_count:
+						search_result_record_count = page_metadata.get("resultset").get("count")
+					retrieved_page_count += 1
+					retrieved_record_count += len(page_records)
+
+					yield page_response, page_json
+
+					# Break if a record limit was set and has been reached, or all records have been retrieved
+					if kwargs.get("record_limit") is not None:
+						if retrieved_record_count >= kwargs.get("record_limit"):
+							break
+					else:
+						if retrieved_record_count >= search_result_record_count:
+							break
+
+					# Update search or related params with new from param
+					if query_mode == "search":
+						request_params["from"] += request_params["size"]
+
+					elif query_mode == "related":
+						request_params["from"] += request_params["size"]
+
+					# Update scroll after initial POST request
+					elif query_mode == "scroll":
+						if not scroll_initiated:
+							print("Scroll initiated, running further page requests")
+							method = "GET"
+							scroll_target = page_response.headers.get("Location")
+							request_url = f"{self.base_url}{scroll_target}"
+							request_params = None
+							scroll_initiated = True
+
+				else:
+					# If no records in page results, break
 					break
 
-			self.method = "GET"
-			self.request_url = "{b}{l}".format(b=self.base_url, l=self.response.headers["Location"])
-			self.send_query()
-			time.sleep(self.sleep)
+			elif page_response.status_code == 429:
+				# API rate limit reached - wait and try again
+				time.sleep(10)
 
 
-class Resource(Request):
-	# Resource object to build a query and hold a returned resource
-	def __init__(self, **kwargs):
-		Request.__init__(self, **kwargs)
-		self.query_type = "resource"
-		self.method = "GET"
-		self.irn = kwargs.get("irn")
-		self.related = kwargs.get("related")
-		self.size = None
-		self.types = None
+class Query:
+	def __init__(self,
+	             url=None,
+	             method=None,
+	             params=None,
+	             headers=None,
+	             data=None,
+	             allow_redirects=True,
+	             stream=False,
+	             timeout=(0.5, 3),
+	             attempts=3,
+	             quiet=True):
 
-		self.build_query()
+		if not method:
+			method = "GET"
 
-	def build_query(self):
-		if not self.endpoint:
-			self.endpoint = "object"
-		self.request_url = "{b}/{e}/{i}".format(b=self.base_url, e=self.endpoint, i=self.irn)
+		# Configure retry strategy
+		retry_strategy = Retry(total=attempts,
+		                       backoff_factor=1,
+		                       status_forcelist=[429, 500, 502, 503, 504],
+		                       allowed_methods=["HEAD", "GET", "OPTIONS", "POST"])
+		adapter = HTTPAdapter(max_retries=retry_strategy)
+		session = Session()
+		session.mount("https://", adapter)
+		session.mount("http://", adapter)
 
-		# Build a search for related
-		if self.related:
-			self.request_url += "/related"
-			if self.size or self.types:
-				self.request_url += "?"
-			if self.size:
-				self.request_url += "size={}".format(self.size)
-			if self.size and self.types:
-				self.request_url += "&"
-			if self.types:
-				self.request_url += "types={}".format(self.types)
+		if not quiet:
+			print(url)
+			if params:
+				print(params)
 
-	def save_record(self):
-		self.response_text = json.loads(self.response.text)
+		self.response = None
+
+		try:
+			if method == "GET":
+				self.response = session.get(url=url,
+				                            params=params,
+				                            headers=headers,
+				                            stream=stream,
+				                            allow_redirects=allow_redirects,
+				                            timeout=timeout)
+			elif method == "HEAD":
+				self.response = session.head(url,
+				                             params=params,
+				                             headers=headers,
+				                             allow_redirects=allow_redirects,
+				                             timeout=timeout)
+			elif method == "POST":
+				self.response = session.post(url,
+				                             params=params,
+				                             headers=headers,
+				                             allow_redirects=allow_redirects,
+				                             timeout=timeout,
+				                             data=data)
+		except exceptions.ConnectionError as e:
+			print(f"Request failed: {e}")
