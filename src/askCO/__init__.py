@@ -125,7 +125,12 @@ class AskCO:
 					pass
 				elif key == "filters":
 					filter_string = self._format_query_filters(value)
-					search_string = f"{search_string} AND {filter_string}"
+					if filter_string:
+						search_string = f"{search_string} {filter_string}"
+
+					if not self.quiet:
+						print(f"Complete search string: {search_string}")
+
 				elif isinstance(value, list):
 					params[key] = ",".join(value)
 				else:
@@ -140,26 +145,94 @@ class AskCO:
 		return params
 
 	def _format_query_filters(self, filters):
-		# Check and format search filters, validate common ones like collection
-		# Note that filters with multiple values only work for GET queries at the moment
-		# Filter terms should be lowercase and if nested, separated with "."
-		# Boolean true and false values, and values including "/", must be enclosed in double quotes
+		# Generate a filter string from a list of filters
+		# Filter field names should be camelCase and if nested, separated with "."
 		# To filter to records where a particular field is populated, use "_exists_"
-		query_filter_parts = []
-		if "collection" in filters:
-			filters["collection"] = self._validate_collection_filters(filters["collection"])
-		for filter_key, filter_value in filters.items():
-			if isinstance(filter_value, list):
-				# Todo: Allow use of "AND" for _exists_
-				joined_filters = " OR ".join([f"{filter_key}:{i}" for i in filter_value])
-				formatted_value = f"({joined_filters})"
-				query_filter_parts.append(formatted_value)
-			elif not filter_value:
-				# Remove filters where the value has been invalidated
-				pass
+		if isinstance(filters, list):
+			filter_type = filters[0].get("type")
+			if filter_type == "not":
+				filter_predicate = "NOT"
+			elif filter_type == "or":
+				filter_predicate = "OR"
 			else:
-				query_filter_parts.append(f"{filter_key}:{filter_value}")
-		filter_string = " AND ".join(query_filter_parts)
+				filter_predicate = "AND"
+
+			filter_string = self._chain_filter_predicates(filters, predicate=filter_predicate, top_level=True)
+
+		else:
+			filter_string = None
+
+		return filter_string
+
+
+	def _chain_filter_predicates(self, filters, predicate="AND", top_level=False):
+		# Run through a list of filters and return a usable string, validating common filters like 'collection'
+		filter_string_parts = []
+		for filter_element in filters:
+			# If no type has been provided, assume equals
+			filter_type = filter_element.get("type")
+			if not filter_type:
+				filter_type = "equals"
+
+			match filter_type:
+				case "equals":
+					field_field = filter_element["field"]
+					filter_value = filter_element["value"]
+
+					# Apply any validations
+					if field_field == "collection":
+						filter_value = self._validate_collection_filters(filter_value)
+
+					if isinstance(filter_value, bool):
+						filter_value = str(filter_value).lower()
+
+					if isinstance(filter_value, str):
+						filter_value = f'"{filter_value}"'
+
+					filter_string_parts.append(f"{predicate} {field_field}:{filter_value}")
+
+				case "and":
+					child_filters = filter_element["predicates"]
+					child_filter_string = self._chain_filter_predicates(child_filters, "AND")
+					filter_string_parts.append(f"{predicate} {child_filter_string}")
+
+				case "in":
+					# Turns a list of values for a single field into joined OR predicates
+					child_filters = [{"type": "equals", "field": filter_element["field"], "value": val} for val in filter_element["value"]]
+					child_filter_string = self._chain_filter_predicates(child_filters, "OR")
+					filter_string_parts.append(f"{predicate} {child_filter_string}")
+
+				case "not":
+					child_filters = filter_element.get("predicates")
+					if not child_filters:
+						child_filters = [filter_element.get("predicate")]
+
+					child_filter_string = self._chain_filter_predicates(child_filters, "NOT")
+					filter_string_parts.append(f"{child_filter_string}")
+
+				case "or":
+					child_filters = filter_element["predicates"]
+					child_filter_string = self._chain_filter_predicates(child_filters, "OR")
+					filter_string_parts.append(f"{predicate} {child_filter_string}")
+
+		# Move _exists_ to the end of the string if present
+		for filter_string_part in filter_string_parts:
+			if "_exists_" in filter_string_part:
+				filter_string_parts.remove(filter_string_part)
+				filter_string_parts.append(filter_string_part)
+
+		filter_string = " ".join(filter_string_parts)
+		if not top_level:
+			if len(filter_string_parts) > 1:
+				if filter_string.startswith("AND"):
+					filter_string = filter_string[4:]
+				if filter_string.startswith("OR"):
+					filter_string = filter_string[3:]
+				filter_string = f"({filter_string})"
+
+		if not self.quiet:
+			print(f"Filter string part: {filter_string}")
+
 		return filter_string
 
 	def _validate_collection_filters(self, query_coll):

@@ -110,14 +110,43 @@ Some of the most useful filters are:
 * `identifier`: the registration number for the item, eg RB001679 - helpful when you want to find a record but don't know its id number
 * `hasRepresentation.rights.allowsDownload`: set to "true" to only return records with images that can be downloaded
 
-Filters are all applied together (ie, using AND), so using `collection:Art` and `type:Specimen` will return no results, because there are no specimens in the Art collection.
+Set up your filters as a list of dictionaries:
 
-You can supply filter values as strings (or integers for numbers), or as a list to apply multiple filters to a single field using OR. This can be useful to search multiple collections or retrieve batches of records using their id number.
+```
+"filters": [
+    {"type": "equals",
+     "field": "collection",
+     "value": "Photography"},
+    {"type": "equals",
+     "field": "hasRepresentation.rights.title",
+     "value": "No Known Copyright"}
+     ]
+```
 
-Boolean filters must be provided as strings, eg 
-"true" or "false".
+Filters get applied as `AND` predicates by default, but you can use others, as well as nest predicates.
 
-Keep in mind that not all fields can be filtered - most nested fields like `production.contributor.title` or `identification.toTaxon.qualifiedName` aren't indexed to allow this. However, the values are still used when searching in general.
+```
+"filters": [
+    {"type": "in",
+     "field": "collection",
+     "value": [
+        "Plants",
+        "Photography"]
+        },
+    {"type": "not",
+     "predicate": 
+        {"type": "equals",
+         "field": "_exists_",
+         "value": "hasRepresentation"}
+         }
+    ]
+```
+
+When you supply a list of values with an `IN` predicate, they'll be sent through as a series of `OR` statements for that field.
+
+Boolean filter values get turned into strings to make them work, and string values get put in quotes. This also lets you use spaces, slashes, and other special characters in your filter values.
+
+Keep in mind that not all fields can be filtered - most nested fields like `production.contributor.title` or `identification.toTaxon.qualifiedName` aren't indexed to allow this. However, the values are still used when searching in general so you can include them in your query.
 
 ### Query facets
 Faceting is not implemented in askCO yet.
