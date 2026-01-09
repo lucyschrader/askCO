@@ -27,8 +27,7 @@ class AskCO:
 		                        "taxon",
 		                        "topic"]
 
-		self.search_defaults = {"query": "*",
-		                        "from": 0,
+		self.search_defaults = {"from": 0,
 		                        "size": 100}
 
 		if not self.quiet:
